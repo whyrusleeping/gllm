@@ -16,6 +16,8 @@ type StructuredRequest[T any] struct {
 	Context      string
 	Images       []string
 	MaxToolCalls int
+
+	PromptOverride map[string]string
 }
 
 func renderOutputSpec(obj any) (string, error) {
@@ -73,12 +75,17 @@ func (t *Tool) GollamaToolDef() gollama.ToolParam {
 	}
 }
 
+func NewClient(olc *gollama.Client) *Client {
+	return &Client{
+		ollmc: olc,
+		Tools: make(map[string]*Tool),
+	}
+}
+
 type Client struct {
 	ollmc *gollama.Client
 
 	Tools map[string]*Tool
-
-	PromptOverride map[string]string
 }
 
 func (c *Client) AddTool(t *Tool) {
@@ -132,12 +139,12 @@ When responding, ensure your output matches the following template strictly, out
 </output_template>
 %s`
 
-func (c *Client) getStructuredCallPrompt() string {
-	if c.PromptOverride == nil {
+func (r *StructuredRequest[T]) getStructuredCallPrompt() string {
+	if r.PromptOverride == nil {
 		return defaultStructuredCallPrompt
 	}
 
-	v, ok := c.PromptOverride["structured_call"]
+	v, ok := r.PromptOverride["structured_call"]
 	if !ok {
 		return defaultStructuredCallPrompt
 	}
@@ -153,7 +160,7 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 
 	m := gollama.Message{
 		Role:    "user",
-		Content: fmt.Sprintf(c.getStructuredCallPrompt(), req.Context, ospec, req.Prompt),
+		Content: fmt.Sprintf(req.getStructuredCallPrompt(), req.Context, ospec, req.Prompt),
 	}
 
 	for _, img := range req.Images {
