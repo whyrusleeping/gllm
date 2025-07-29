@@ -10,12 +10,12 @@ import (
 
 type StructuredRequest[T any] struct {
 	Model        string
-	OutputSpec   *T
 	System       string
 	Prompt       string
 	Context      string
 	Images       []string
 	MaxToolCalls int
+	Tools        []*Tool
 
 	PromptOverride map[string]string
 }
@@ -105,12 +105,15 @@ func (c *Client) GetTools() []gollama.ToolParam {
 	return out
 }
 
-func (c *Client) HandleToolCall(call gollama.ToolCall) (string, error) {
-	if c.Tools == nil {
-		c.Tools = make(map[string]*Tool)
+func (c *Client) HandleToolCall(tools []*Tool, call gollama.ToolCall) (string, error) {
+	var t *Tool
+	for _, ot := range tools {
+		if ot.Name == call.Function.Name {
+			t = ot
+			break
+		}
 	}
-	t, ok := c.Tools[call.Function.Name]
-	if !ok {
+	if t == nil {
 		return "", fmt.Errorf("no such tool %q", call.Function.Name)
 	}
 
@@ -153,7 +156,7 @@ func (r *StructuredRequest[T]) getStructuredCallPrompt() string {
 }
 
 func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error) {
-	ospec, err := renderOutputSpec(req.OutputSpec)
+	ospec, err := renderOutputSpec(new(T))
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +172,17 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 
 	msgs := []gollama.Message{m}
 
+	var tools []*Tool
+	var tooldefs []gollama.ToolParam
+	for _, t := range c.Tools {
+		tools = append(tools, t)
+		tooldefs = append(tooldefs, t.GollamaToolDef())
+	}
+	for _, t := range req.Tools {
+		tools = append(tools, t)
+		tooldefs = append(tooldefs, t.GollamaToolDef())
+	}
+
 	for {
 		glreq := gollama.RequestOptions{
 			Model:    req.Model,
@@ -178,7 +192,7 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 		}
 
 		if req.MaxToolCalls > 0 {
-			glreq.Tools = c.GetTools()
+			glreq.Tools = tooldefs
 			glreq.ToolChoice = "auto"
 		}
 
@@ -192,6 +206,8 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 		if len(mm.ToolCalls) == 0 {
 			output := cleanJsonOutput(resp.Choices[0].Message.Content)
 
+			fmt.Println("MODEL OUTPUT:\n", output)
+
 			var outv T
 			if err := json.Unmarshal([]byte(output), &outv); err != nil {
 				return nil, err
@@ -204,7 +220,9 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 			fmt.Println("MODEL REQUESTED MULTIPLE TOOL CALLS, ONLY DOING ONE")
 		}
 
-		toolresp, err := c.HandleToolCall(mm.ToolCalls[0])
+		fmt.Println("model requested tool call: ", mm.ToolCalls[0])
+
+		toolresp, err := c.HandleToolCall(tools, mm.ToolCalls[0])
 		if err != nil {
 			return nil, fmt.Errorf("tool call failed: %w", err)
 		}
@@ -214,8 +232,9 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 		msgs = append(msgs,
 			mm,
 			gollama.Message{
-				Role:    "tool",
-				Content: toolresp,
+				Role:       "tool",
+				Content:    toolresp,
+				ToolCallID: mm.ToolCalls[0].ID,
 			},
 		)
 	}
