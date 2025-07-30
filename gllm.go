@@ -86,6 +86,8 @@ type Client struct {
 	ollmc *gollama.Client
 
 	Tools map[string]*Tool
+
+	Debug bool
 }
 
 func (c *Client) AddTool(t *Tool) {
@@ -117,8 +119,10 @@ func (c *Client) HandleToolCall(tools []*Tool, call gollama.ToolCall) (string, e
 		return "", fmt.Errorf("no such tool %q", call.Function.Name)
 	}
 
-	fmt.Println("CALL: ", t.Name)
-	fmt.Println("Arguments: ", call.Function.Arguments)
+	if c.Debug {
+		fmt.Println("CALL: ", t.Name)
+		fmt.Println("Arguments: ", call.Function.Arguments)
+	}
 
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(call.Function.Arguments), &obj); err != nil {
@@ -153,6 +157,14 @@ func (r *StructuredRequest[T]) getStructuredCallPrompt() string {
 	}
 
 	return v
+}
+
+func pjson(v any) {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(b))
 }
 
 func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error) {
@@ -196,9 +208,19 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 			glreq.ToolChoice = "auto"
 		}
 
+		if c.Debug {
+			fmt.Println("Making completion request: ")
+			pjson(glreq.Messages)
+		}
+
 		resp, err := c.ollmc.ChatCompletion(glreq)
 		if err != nil {
 			return nil, err
+		}
+
+		if c.Debug {
+			fmt.Println("Response: ")
+			pjson(resp)
 		}
 
 		mm := resp.Choices[0].Message
@@ -206,10 +228,25 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 		if len(mm.ToolCalls) == 0 {
 			output := cleanJsonOutput(resp.Choices[0].Message.Content)
 
-			fmt.Println("MODEL OUTPUT:\n", output)
+			fmt.Println("MODEL OUTPUT:")
+			fmt.Println(output)
 
+			var message, jsonout string
+			if strings.HasPrefix(output, "{") {
+				jsonout = output
+			} else {
+				lines := strings.Split(output, "\n")
+				if strings.HasPrefix(lines[len(lines)-1], "{") {
+					message = strings.Join(lines[:len(lines)-1], "\n")
+					jsonout = lines[len(lines)-1]
+				}
+			}
+
+			if message != "" {
+				fmt.Printf("Model sent a message along with its output: %q", message)
+			}
 			var outv T
-			if err := json.Unmarshal([]byte(output), &outv); err != nil {
+			if err := json.Unmarshal([]byte(jsonout), &outv); err != nil {
 				return nil, err
 			}
 
