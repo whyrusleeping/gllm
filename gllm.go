@@ -173,6 +173,15 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 		return nil, err
 	}
 
+	// system
+	var msgs []gollama.Message
+	if req.System != "" {
+		msgs = append(msgs, gollama.Message{
+			Role:    "system",
+			Content: req.System,
+		})
+	}
+
 	m := gollama.Message{
 		Role:    "user",
 		Content: fmt.Sprintf(req.getStructuredCallPrompt(), req.Context, ospec, req.Prompt),
@@ -182,7 +191,7 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 		m.Images = append(m.Images, img)
 	}
 
-	msgs := []gollama.Message{m}
+	msgs = append(msgs, m)
 
 	var tools []*Tool
 	var tooldefs []gollama.ToolParam
