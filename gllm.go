@@ -167,7 +167,13 @@ func pjson(v any) {
 	fmt.Println(string(b))
 }
 
-func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error) {
+type Response[T any] struct {
+	Output       *T
+	ModelComment string
+	RawResponse  *gollama.ResponseMessageGenerate
+}
+
+func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*Response[T], error) {
 	ospec, err := renderOutputSpec(new(T))
 	if err != nil {
 		return nil, err
@@ -237,8 +243,10 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 		if len(mm.ToolCalls) == 0 {
 			output := cleanJsonOutput(resp.Choices[0].Message.Content)
 
-			fmt.Println("MODEL OUTPUT:")
-			fmt.Println(output)
+			if c.Debug {
+				fmt.Println("MODEL OUTPUT:")
+				fmt.Println(output)
+			}
 
 			var message, jsonout string
 			if strings.HasPrefix(output, "{") {
@@ -259,7 +267,11 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*T, error
 				return nil, err
 			}
 
-			return &outv, nil
+			return &Response[T]{
+				Output:       &outv,
+				ModelComment: message,
+				RawResponse:  resp,
+			}, nil
 		}
 
 		if len(mm.ToolCalls) > 1 {
