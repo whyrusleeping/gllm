@@ -188,9 +188,10 @@ func pjson(v any) {
 }
 
 type Response[T any] struct {
-	Output       *T
-	ModelComment string
-	RawResponse  *gollama.ResponseMessageGenerate
+	Output        *T
+	ModelComment  string
+	RawResponse   *gollama.ResponseMessageGenerate
+	InputMessages []gollama.Message
 }
 
 func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*Response[T], error) {
@@ -290,9 +291,10 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*Response
 			}
 
 			return &Response[T]{
-				Output:       &outv,
-				ModelComment: message,
-				RawResponse:  resp,
+				Output:        &outv,
+				ModelComment:  message,
+				RawResponse:   resp,
+				InputMessages: msgs,
 			}, nil
 		}
 
