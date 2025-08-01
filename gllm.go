@@ -9,11 +9,27 @@ import (
 )
 
 type StructuredRequest[T any] struct {
-	Model        string
-	System       string
-	Prompt       string
-	Context      string
-	Images       []string
+	Model string
+
+	// System prompt for the LLM
+	System string
+
+	// Prompt for this request, essentially the function definition
+	Prompt string
+
+	// Context is the input for this specific task, if you are making
+	// multiple calls with different inputs, this is the field that should
+	// vary
+	Context string
+
+	// MessagePrefill sets the chat history before this prompt gets
+	// executed. This will override the system prompt for this request, so
+	// if you need the system prompt ensure that its included here
+	MessagePrefill []gollama.Message
+
+	// Images is an array of base64 encoded images, no other prefixing
+	Images []string
+
 	MaxToolCalls int
 	Tools        []*Tool
 
@@ -146,12 +162,16 @@ When responding, ensure your output matches the following template strictly, out
 </output_template>
 %s`
 
+const (
+	PromptTypeStructuredCall = "structured_call"
+)
+
 func (r *StructuredRequest[T]) getStructuredCallPrompt() string {
 	if r.PromptOverride == nil {
 		return defaultStructuredCallPrompt
 	}
 
-	v, ok := r.PromptOverride["structured_call"]
+	v, ok := r.PromptOverride[PromptTypeStructuredCall]
 	if !ok {
 		return defaultStructuredCallPrompt
 	}
@@ -181,7 +201,9 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*Response
 
 	// system
 	var msgs []gollama.Message
-	if req.System != "" {
+	if len(req.MessagePrefill) > 0 {
+		msgs = req.MessagePrefill
+	} else if req.System != "" {
 		msgs = append(msgs, gollama.Message{
 			Role:    "system",
 			Content: req.System,
