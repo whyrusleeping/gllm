@@ -153,14 +153,15 @@ func (c *Client) HandleToolCall(tools []*Tool, call gollama.ToolCall) (string, e
 	return resp, nil
 }
 
-const defaultStructuredCallPrompt = `<context_for_task>
-%s
-</context_for_task>
+const defaultStructuredCallPrompt = `
 When responding, ensure your output matches the following template strictly, output only json, starting with the { character
 <output_template>
 %s
 </output_template>
-%s`
+%s
+<context_for_task>
+%s
+</context_for_task>`
 
 const (
 	PromptTypeStructuredCall = "structured_call"
@@ -213,7 +214,7 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*Response
 
 	m := gollama.Message{
 		Role:    "user",
-		Content: fmt.Sprintf(req.getStructuredCallPrompt(), req.Context, ospec, req.Prompt),
+		Content: fmt.Sprintf(req.getStructuredCallPrompt(), ospec, req.Prompt, req.Context),
 	}
 
 	for _, img := range req.Images {
