@@ -1,9 +1,11 @@
 package gllm
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"text/template"
 
 	"github.com/whyrusleeping/gollama"
 )
@@ -153,14 +155,24 @@ func (c *Client) HandleToolCall(tools []*Tool, call gollama.ToolCall) (string, e
 	return resp, nil
 }
 
+type structuredCallParams struct {
+	OutputTemplate string
+	Prompt         string
+	Context        string
+	MaxToolCalls   int
+}
+
 const defaultStructuredCallPrompt = `
 When responding, ensure your output matches the following template strictly, output only json, starting with the { character
 <output_template>
-%s
+{{.OutputTemplate}}
 </output_template>
-%s
+{{.Prompt}}
+{{ if .MaxToolCalls > 0 }}
+Max at most {{.MaxToolCalls}} tool calls.
+{{end}}
 <context_for_task>
-%s
+{{.Context}}
 </context_for_task>`
 
 const (
@@ -212,9 +224,24 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*Response
 		})
 	}
 
+	templ, err := template.New("prompt").Parse(req.getStructuredCallPrompt())
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse prompt template: %w", err)
+	}
+
+	buf := new(bytes.Buffer)
+	if err := templ.Execute(buf, &structuredCallParams{
+		OutputTemplate: ospec,
+		Prompt:         req.Prompt,
+		Context:        req.Context,
+		MaxToolCalls:   req.MaxToolCalls,
+	}); err != nil {
+		return nil, fmt.Errorf("prompt template execution failed: %w", err)
+	}
+
 	m := gollama.Message{
 		Role:    "user",
-		Content: fmt.Sprintf(req.getStructuredCallPrompt(), ospec, req.Prompt, req.Context),
+		Content: buf.String(),
 	}
 
 	for _, img := range req.Images {
