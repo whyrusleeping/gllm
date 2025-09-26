@@ -168,7 +168,7 @@ When responding, ensure your output matches the following template strictly, out
 {{.OutputTemplate}}
 </output_template>
 {{.Prompt}}
-{{ if .MaxToolCalls > 0 }}
+{{ if gt .MaxToolCalls 0 }}
 Max at most {{.MaxToolCalls}} tool calls.
 {{end}}
 <context_for_task>
