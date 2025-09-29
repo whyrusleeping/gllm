@@ -304,9 +304,11 @@ func ModelCallStructured[T any](c *Client, req *StructuredRequest[T]) (*Response
 				jsonout = output
 			} else {
 				lines := strings.Split(output, "\n")
-				if strings.HasPrefix(lines[len(lines)-1], "{") {
-					message = strings.Join(lines[:len(lines)-1], "\n")
-					jsonout = lines[len(lines)-1]
+				for i, l := range lines {
+					if strings.HasPrefix(l, "{") {
+						jsonout = strings.Join(lines[i:], "\n")
+						break
+					}
 				}
 			}
 
