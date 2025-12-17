@@ -179,9 +179,10 @@ func (r *StructuredRequest[T]) EstimateRequestSize() (int, error) {
 	}
 
 	userMsg := gollama.Message{
-		Role:    "user",
-		Content: buf.String(),
-		Images:  r.Images,
+		Role:               "user",
+		Content:            buf.String(),
+		Images:             r.Images,
+		UseAnthropicFormat: true, // Batch API uses Anthropic's native /messages endpoint
 	}
 	msgs = append(msgs, userMsg)
 
@@ -446,8 +447,9 @@ func ModelCallStructuredBatch[T any](c *Client, model string, requests []*Struct
 		}
 
 		userMsg := gollama.Message{
-			Role:    "user",
-			Content: buf.String(),
+			Role:               "user",
+			Content:            buf.String(),
+			UseAnthropicFormat: true, // Batch API uses Anthropic's native /messages endpoint
 		}
 
 		// Add images if present
