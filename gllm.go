@@ -167,15 +167,12 @@ func (r *StructuredRequest[T]) EstimateRequestSize() (int, error) {
 		return 0, fmt.Errorf("prompt template execution failed: %w", err)
 	}
 
-	// Build the messages array as it would be in the batch request
+	// Build the messages array as it would be in the batch request.
+	// The system prompt is threaded via BatchRequestParams.System, not as a
+	// message role, since Anthropic's API rejects "system" as an input role.
 	var msgs []gollama.Message
 	if len(r.MessagePrefill) > 0 {
 		msgs = r.MessagePrefill
-	} else if r.System != "" {
-		msgs = append(msgs, gollama.Message{
-			Role:    "system",
-			Content: r.System,
-		})
 	}
 
 	userMsg := gollama.Message{
@@ -192,6 +189,7 @@ func (r *StructuredRequest[T]) EstimateRequestSize() (int, error) {
 		Params: gollama.BatchRequestParams{
 			Model:     r.Model,
 			MaxTokens: 4096,
+			System:    r.System,
 			Messages:  msgs,
 		},
 	}
@@ -241,15 +239,12 @@ func ModelCallStructured[T any](c *Client, ctx context.Context, req *StructuredR
 		return nil, err
 	}
 
-	// system
+	// The system prompt is threaded via RequestOptions.System below, not as
+	// a "system"-role message, since Anthropic's API rejects that role on
+	// input messages.
 	var msgs []gollama.Message
 	if len(req.MessagePrefill) > 0 {
 		msgs = req.MessagePrefill
-	} else if req.System != "" {
-		msgs = append(msgs, gollama.Message{
-			Role:    "system",
-			Content: req.System,
-		})
 	}
 
 	templ, err := template.New("prompt").Parse(req.getStructuredCallPrompt())
@@ -443,15 +438,11 @@ func ModelCallStructuredBatch[T any](c *Client, model string, requests []*Struct
 			return nil, fmt.Errorf("prompt template execution failed for request %d: %w", i, err)
 		}
 
-		// Build messages array
+		// Build messages array. The system prompt is threaded via
+		// BatchRequestParams.System, not as a "system"-role message.
 		var msgs []gollama.Message
 		if len(req.MessagePrefill) > 0 {
 			msgs = req.MessagePrefill
-		} else if req.System != "" {
-			msgs = append(msgs, gollama.Message{
-				Role:    "system",
-				Content: req.System,
-			})
 		}
 
 		userMsg := gollama.Message{
@@ -474,6 +465,7 @@ func ModelCallStructuredBatch[T any](c *Client, model string, requests []*Struct
 			Params: gollama.BatchRequestParams{
 				Model:     model,
 				MaxTokens: 4096, // Default, can be made configurable
+				System:    req.System,
 				Messages:  msgs,
 			},
 		})
