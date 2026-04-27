@@ -355,15 +355,23 @@ func ModelCallStructured[T any](c *Client, ctx context.Context, req *StructuredR
 			toolresp, err := gollama.HandleToolCall(ctx, req.Tools, tc)
 			if err != nil {
 				// Return error to model instead of failing completely
-				toolresp = fmt.Sprintf("Error: %v", err)
-				c.debugf("Tool call error (sending to model): %s", toolresp)
+				toolresp = &gollama.ToolResult{
+					Content: fmt.Sprintf("Error: %v", err),
+					IsError: true,
+				}
+				c.debugf("Tool call error (sending to model): %s", toolresp.Content)
 			}
 
-			msgs = append(msgs, gollama.Message{
+			toolMsg := gollama.Message{
 				Role:       "tool",
-				Content:    toolresp,
 				ToolCallID: tc.ID,
-			})
+			}
+			if toolresp != nil {
+				toolMsg.Content = toolresp.Content
+				toolMsg.Images = toolresp.Images
+				toolMsg.Documents = toolresp.Documents
+			}
+			msgs = append(msgs, toolMsg)
 
 			req.MaxToolCalls--
 			if req.MaxToolCalls <= 0 {

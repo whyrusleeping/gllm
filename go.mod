@@ -2,7 +2,7 @@ module github.com/whyrusleeping/gllm
 
 go 1.24.5
 
-require github.com/whyrusleeping/gollama v0.0.0-20251112213250-bb038b951b3a
+require github.com/whyrusleeping/gollama v0.0.0-20260427104800-d7baf14f7011
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
